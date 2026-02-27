@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hangman</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a18;
+    --paper: #f5f0e8;
+    --ink: #1a1a18;
+    --red: #c0392b;
+    --faded: #8a8070;
+    --rope: #8B6914;
+  }
+
+  body {
+    background: var(--bg);
+    font-family: 'Courier Prime', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 28px,
+      rgba(255,255,255,0.03) 28px, rgba(255,255,255,0.03) 29px
+    );
+    pointer-events: none;
+  }
+
+  h1 {
+    font-family: 'Special Elite', cursive;
+    color: var(--paper);
+    font-size: clamp(2rem, 6vw, 4rem);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+  }
+
+  .subtitle {
+    color: var(--faded);
+    font-size: 0.8rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+
+  .screen { display: none; width: 100%; max-width: 700px; }
+  .screen.active { display: block; }
+
+  /* ── Welcome ── */
+  #welcome-screen { text-align: center; }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-top: 30px;
+  }
+
+  input[type="text"] {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--faded);
+    color: var(--paper);
+    font-family: 'Courier Prime', monospace;
+    font-size: 1.2rem;
+    padding: 8px 4px;
+    text-align: center;
+    outline: none;
+    width: 260px;
+    letter-spacing: 0.1em;
+    transition: border-color 0.2s;
+  }
+
+  input[type="text"]::placeholder { color: var(--faded); }
+  input[type="text"]:focus { border-bottom-color: var(--paper); }
+
+  .btn {
+    font-family: 'Special Elite', cursive;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: var(--paper);
+    color: var(--ink);
+    border: none;
+    padding: 12px 36px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 4px 4px 0 var(--faded);
+  }
+
+  .btn:hover  { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--faded); }
+  .btn:active { transform: translate(2px,2px);   box-shadow: 2px 2px 0 var(--faded); }
+  .btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+  /* ── Game ── */
+  #game-screen { display: none; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
+  #game-screen.active { display: grid; }
+  @media (max-width: 560px) { #game-screen.active { grid-template-columns: 1fr; } }
+
+  .gallows-container { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+  svg#gallows {
+    width: 100%;
+    max-width: 220px;
+    filter: drop-shadow(0 0 20px rgba(192,57,43,0.15));
+  }
+
+  .chances-bar { display: flex; gap: 6px; }
+  .chance-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--paper);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .chance-dot.used { background: var(--red); transform: scale(0.7); }
+
+  .game-panel { display: flex; flex-direction: column; gap: 24px; }
+
+  .player-tag { color: var(--faded); font-size: 0.75rem; letter-spacing: 0.25em; text-transform: uppercase; }
+  .player-tag span { color: var(--paper); font-size: 0.9rem; }
+
+  .word-display { display: flex; gap: 10px; flex-wrap: wrap; }
+  .letter-box {
+    width: 32px; text-align: center;
+    border-bottom: 2px solid var(--faded);
+    padding-bottom: 4px;
+    font-size: 1.5rem; font-weight: 700;
+    color: var(--paper); line-height: 1;
+    transition: color 0.3s;
+  }
+  .letter-box.revealed { color: #7ec882; border-bottom-color: #7ec882; animation: pop 0.3s ease; }
+
+  @keyframes pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.4); }
+    100% { transform: scale(1); }
+  }
+
+  .wrong-section label {
+    display: block; color: var(--faded);
+    font-size: 0.7rem; letter-spacing: 0.3em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+
+  .wrong-letters { display: flex; gap: 8px; flex-wrap: wrap; min-height: 28px; }
+  .wrong-letter { color: var(--red); font-size: 1.1rem; font-weight: 700; animation: shake 0.3s ease; }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25%     { transform: translateX(-4px); }
+    75%     { transform: translateX(4px); }
+  }
+
+  .guess-area { display: flex; gap: 10px; align-items: flex-end; }
+  .guess-area input { width: 60px; font-size: 1.8rem; text-transform: lowercase; text-align: center; padding: 4px; border-bottom-width: 3px; }
+
+  .msg { font-size: 0.8rem; color: var(--faded); letter-spacing: 0.1em; min-height: 18px; }
+  .msg.good { color: #7ec882; }
+  .msg.bad  { color: var(--red); }
+
+  /* ── Result ── */
+  #result-screen { text-align: center; }
+
+  .result-title { font-family: 'Special Elite', cursive; font-size: clamp(2.5rem, 8vw, 5rem); margin-bottom: 16px; }
+  .result-title.win  { color: #7ec882; text-shadow: 0 0 40px rgba(126,200,130,0.4); }
+  .result-title.lose { color: var(--red); text-shadow: 0 0 40px rgba(192,57,43,0.4); }
+
+  .result-word { color: var(--faded); font-size: 0.9rem; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+  .result-word span { color: var(--paper); font-size: 1.4rem; letter-spacing: 0.3em; }
+
+  .result-actions { display: flex; gap: 16px; justify-content: center; margin-top: 30px; }
+
+  /* ── Keyboard ── */
+  .keyboard { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .kb-row { display: flex; gap: 5px; justify-content: center; }
+  .kb-key {
+    width: 30px; height: 30px;
+    background: #2e2e2a; border: 1px solid #444;
+    color: var(--paper); font-family: 'Courier Prime', monospace;
+    font-size: 0.75rem; cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    text-transform: uppercase;
+  }
+  .kb-key:hover:not(:disabled) { background: #444; transform: translateY(-2px); }
+  .kb-key:disabled { cursor: default; }
+  .kb-key.hit  { background: #2a4a2c; color: #7ec882; border-color: #7ec882; }
+  .kb-key.miss { background: #3a1a1a; color: #7b241c; border-color: #7b241c; }
+
+  /* SVG body parts */
+  #g-head, #g-body, #g-arm-l, #g-arm-r, #g-leg-l, #g-leg-r {
+    stroke: var(--paper); stroke-width: 3; stroke-linecap: round; fill: none;
+    opacity: 0; transition: opacity 0.4s;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid var(--faded);
+    border-top-color: var(--paper);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-banner {
+    background: #3a1a1a;
+    border: 1px solid var(--red);
+    color: var(--paper);
+    padding: 12px 20px;
+    font-size: 0.85rem;
+    margin-top: 16px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- WELCOME -->
+<div id="welcome-screen" class="screen active">
+  <h1>Hangman</h1>
+  <p class="subtitle">A game of letters &amp; luck</p>
+  <div class="input-group">
+    <input type="text" id="name-input" placeholder="Enter your name" maxlength="20" autocomplete="off">
+    <button class="btn" id="start-btn" onclick="startGame()">Begin</button>
+    <div class="error-banner" id="connect-error">
+      ⚠ Cannot reach the game server at <strong>localhost:8080</strong>.<br>
+      Make sure <code>hangman_server.exe</code> is running.
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game-screen" class="screen">
+  <div class="gallows-container">
+    <svg id="gallows" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+      <line x1="20"  y1="230" x2="180" y2="230" stroke="#8B6914" stroke-width="4" stroke-linecap="round"/>
+      <line x1="60"  y1="230" x2="60"  y2="20"  stroke="#8B6914" stroke-width="4" stroke-linecap="round"/>
+      <line x1="60"  y1="20"  x2="130" y2="20"  stroke="#8B6914" stroke-width="4" stroke-linecap="round"/>
+      <line x1="130" y1="20"  x2="130" y2="45"  stroke="#8B6914" stroke-width="3" stroke-linecap="round"/>
+      <circle id="g-head"  cx="130" cy="62"  r="17"/>
+      <line   id="g-body"  x1="130" y1="79"  x2="130" y2="145"/>
+      <line   id="g-arm-l" x1="130" y1="95"  x2="100" y2="125"/>
+      <line   id="g-arm-r" x1="130" y1="95"  x2="160" y2="125"/>
+      <line   id="g-leg-l" x1="130" y1="145" x2="100" y2="185"/>
+      <line   id="g-leg-r" x1="130" y1="145" x2="160" y2="185"/>
+    </svg>
+    <div class="chances-bar" id="chances-bar"></div>
+  </div>
+
+  <div class="game-panel">
+    <div class="player-tag">Player — <span id="display-name"></span></div>
+    <div class="word-display" id="word-display"></div>
+    <div class="wrong-section">
+      <label>Wrong guesses</label>
+      <div class="wrong-letters" id="wrong-letters"></div>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="guess-area">
+      <input type="text" id="guess-input" maxlength="1" placeholder="_" autocomplete="off">
+      <button class="btn" id="guess-btn" onclick="submitGuess()">Guess</button>
+    </div>
+    <div class="keyboard" id="keyboard"></div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="result-screen" class="screen">
+  <h1>Hangman</h1>
+  <div class="result-title" id="result-title">You Won!</div>
+  <div class="result-word">The word was <br><span id="result-word"></span></div>
+  <div class="result-actions">
+    <button class="btn" onclick="playAgain()">Play Again</button>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const SERVER = 'http://localhost:8080';   // Change port here if needed
+const MAX_CHANCES = 6;
+const PARTS = ['g-head','g-body','g-arm-l','g-arm-r','g-leg-l','g-leg-r'];
+const KB_ROWS = ['qwertyuiop','asdfghjkl','zxcvbnm'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let playerName   = '';
+let wordLength   = 0;
+let correctWord  = [];   // array of chars/underscores kept in sync with server
+let wrongLetters = [];
+let guessedLetters = new Set();
+let gameOver     = false;
+let busy         = false;  // prevent double-clicks during fetch
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+
+async function apiNewGame() {
+  const res = await fetch(`${SERVER}/new`);
+  if (!res.ok) throw new Error('Server error');
+  return res.json();   // {length: N}
+}
+
+async function apiGuess(letter) {
+  const res = await fetch(`${SERVER}/guess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ letter })
+  });
+  if (!res.ok) throw new Error('Server error');
+  return res.json();
+  // hit:  {hit:true,  word:"_e__o", won:false}
+  // miss: {hit:false, wrong_count:2, wrong_letters:"xz", lost:false, answer:""}
+}
+
+// ── Game flow ─────────────────────────────────────────────────────────────────
+
+async function startGame() {
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Connecting...';
+  document.getElementById('connect-error').style.display = 'none';
+
+  try {
+    const data = await apiNewGame();
+    wordLength     = data.length;
+    correctWord    = Array(wordLength).fill('_');
+    wrongLetters   = [];
+    guessedLetters = new Set();
+    gameOver       = false;
+    busy           = false;
+
+    playerName = document.getElementById('name-input').value.trim() || 'Player';
+    document.getElementById('display-name').textContent = playerName;
+
+    buildChancesBar();
+    buildKeyboard();
+    renderWord();
+    renderWrongLetters([]);
+    renderGallows(0);
+    setMsg('');
+
+    showScreen('game-screen');
+    setTimeout(() => document.getElementById('guess-input').focus(), 100);
+
+  } catch (e) {
+    document.getElementById('connect-error').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Begin';
+  }
+}
+
+async function submitGuess() {
+  if (gameOver || busy) return;
+
+  const input = document.getElementById('guess-input');
+  const ch = input.value.trim().toLowerCase();
+  input.value = '';
+  input.focus();
+
+  if (!ch || !/^[a-z]$/.test(ch)) {
+    setMsg('Enter a single letter a–z', 'bad');
+    return;
+  }
+
+  if (guessedLetters.has(ch)) {
+    setMsg(`You already guessed '${ch}'`, 'bad');
+    return;
+  }
+
+  guessedLetters.add(ch);
+  busy = true;
+  document.getElementById('guess-btn').disabled = true;
+
+  try {
+    const data = await apiGuess(ch);
+
+    if (data.hit) {
+      // Server sends back the full correct_word string e.g. "_ell_"
+      correctWord = data.word.split('');
+      renderWord();
+      markKey(ch, 'hit');
+      setMsg(`'${ch}' is in the word!`, 'good');
+
+      if (data.won) {
+        endGame(true, data.word);
+        return;
+      }
+
+    } else {
+      // Server sends back wrong_count and wrong_letters string e.g. "xzq"
+      wrongLetters = data.wrong_letters.split('');
+      renderWrongLetters(wrongLetters);
+      renderGallows(data.wrong_count);
+      markKey(ch, 'miss');
+      setMsg(`'${ch}' is not in the word`, 'bad');
+
+      if (data.lost) {
+        endGame(false, data.answer);
+        return;
+      }
+    }
+
+  } catch (e) {
+    setMsg('Server error — is hangman_server.exe running?', 'bad');
+  } finally {
+    busy = false;
+    document.getElementById('guess-btn').disabled = false;
+  }
+}
+
+function endGame(won, word) {
+  gameOver = true;
+  setTimeout(() => {
+    document.getElementById('result-title').textContent = won ? 'You Won!' : 'You Lost.';
+    document.getElementById('result-title').className   = 'result-title ' + (won ? 'win' : 'lose');
+    document.getElementById('result-word').textContent  = word.toUpperCase();
+    showScreen('result-screen');
+  }, 600);
+}
+
+async function playAgain() {
+  document.getElementById('name-input').value = playerName;
+  await startGame();
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+
+function buildChancesBar() {
+  const bar = document.getElementById('chances-bar');
+  bar.innerHTML = '';
+  for (let i = 0; i < MAX_CHANCES; i++) {
+    const d = document.createElement('div');
+    d.className = 'chance-dot';
+    d.id = `dot-${i}`;
+    bar.appendChild(d);
+  }
+}
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  KB_ROWS.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'kb-row';
+    [...row].forEach(ch => {
+      const btn = document.createElement('button');
+      btn.className = 'kb-key';
+      btn.textContent = ch;
+      btn.id = `kb-${ch}`;
+      btn.onclick = () => {
+        document.getElementById('guess-input').value = ch;
+        submitGuess();
+      };
+      rowEl.appendChild(btn);
+    });
+    kb.appendChild(rowEl);
+  });
+}
+
+function renderWord() {
+  const wd = document.getElementById('word-display');
+  wd.innerHTML = '';
+  correctWord.forEach((ch, i) => {
+    const box = document.createElement('div');
+    box.className = 'letter-box' + (ch !== '_' ? ' revealed' : '');
+    box.id = `lb-${i}`;
+    box.textContent = ch !== '_' ? ch : '';
+    wd.appendChild(box);
+  });
+}
+
+function renderWrongLetters(letters) {
+  const wl = document.getElementById('wrong-letters');
+  wl.innerHTML = '';
+  letters.forEach(ch => {
+    const span = document.createElement('span');
+    span.className = 'wrong-letter';
+    span.textContent = ch;
+    wl.appendChild(span);
+  });
+}
+
+function renderGallows(wrongCount) {
+  PARTS.forEach((id, i) => {
+    document.getElementById(id).style.opacity = i < wrongCount ? '1' : '0';
+  });
+  for (let i = 0; i < MAX_CHANCES; i++) {
+    const dot = document.getElementById(`dot-${i}`);
+    if (dot) dot.className = 'chance-dot' + (i < wrongCount ? ' used' : '');
+  }
+}
+
+function markKey(ch, cls) {
+  const key = document.getElementById(`kb-${ch}`);
+  if (key) { key.classList.add(cls); key.disabled = true; }
+}
+
+function setMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className   = 'msg ' + (type || '');
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Keyboard shortcut ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('welcome-screen').classList.contains('active')) startGame();
+    else if (document.getElementById('game-screen').classList.contains('active'))   submitGuess();
+  }
+});
+</script>
+</body>
+</html>
