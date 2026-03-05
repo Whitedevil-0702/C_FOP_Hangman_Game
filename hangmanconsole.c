@@ -10,7 +10,7 @@
 const char *words[NUM_WORDS] = {
     "beautiful", "yummy", "hello", "world", "home", "game",
     "music", "operation", "water", "air", "ship", "submarine",
-    "nice", "computer", "dog", "cat", "tiger", "lion"
+    "nice", "computer", "dog", "cat", "tiger", "lion", "elephant","Lazy", "Quick", "Brown", "Fox","onomatopeia", "supercalifragilisticexpialidocious"
 };
 
 char game_word[MAX_WORD_LEN];
